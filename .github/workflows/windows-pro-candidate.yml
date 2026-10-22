@@ -87,6 +87,10 @@ jobs:
           test -s candidate/platforms/qwindows.dll
           test -s candidate/poppler/Library/bin/pdftotext.exe
           echo 'Candidate staging complete; full PDF/Office runtime and GUI validation still required.'
+      - name: Run isolated packaged-runtime smoke tests
+        shell: pwsh
+        run: |
+          ./scripts/test-windows-candidate.ps1 -CandidateDir ./candidate
       - name: Create experimental ZIP (NOT a validated release)
         shell: pwsh
         run: |
