@@ -3,11 +3,11 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $CandidateDir = (Resolve-Path $CandidateDir).Path
-$datadir = Join-Path $CandidateDir "share\recoll"
+$datadir = Join-Path $CandidateDir "share"
 Write-Host "Testing candidate at: $CandidateDir"
 foreach ($relative in @(
     "recoll.exe", "recollq.exe", "recollindex.exe",
-    "platforms\qwindows.dll", "share\recoll\examples\recoll.conf",
+    "platforms\qwindows.dll", "share\examples\recoll.conf",
     "poppler\Library\bin\pdftotext.exe"
 )) {
     $file = Join-Path $CandidateDir $relative
