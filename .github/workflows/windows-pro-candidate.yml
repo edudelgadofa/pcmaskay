@@ -58,7 +58,8 @@ jobs:
           cp build_mingw/{recoll.exe,recollindex.exe,recollq.exe} candidate/
           cp src/COPYING candidate/
           cp -R src/sampleconf candidate/share/recoll/examples
-          cp -R src/filters candidate/share/recoll/filters
+          # Dereference upstream symlinks (conftree.py/rclconfig.py); Windows packaging cannot preserve their relative targets.
+          cp -RL src/filters candidate/share/recoll/filters
           /mingw64/bin/windeployqt6.exe --release --no-translations --dir candidate candidate/recoll.exe
           for exe in pdftotext pdfinfo pdfdetach pdftohtml; do
             test -s "/mingw64/bin/$exe.exe"
