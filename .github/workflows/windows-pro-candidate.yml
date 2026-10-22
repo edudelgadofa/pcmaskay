@@ -54,12 +54,12 @@ jobs:
       - name: Stage essential runtime files
         run: |
           set -euo pipefail
-          mkdir -p candidate/platforms candidate/share/recoll candidate/poppler/Library/bin
+          mkdir -p candidate/platforms candidate/share candidate/poppler/Library/bin
           cp build_mingw/{recoll.exe,recollindex.exe,recollq.exe} candidate/
           cp src/COPYING candidate/
-          cp -R src/sampleconf candidate/share/recoll/examples
+          cp -R src/sampleconf candidate/share/examples
           # Dereference upstream symlinks (conftree.py/rclconfig.py); Windows packaging cannot preserve their relative targets.
-          cp -RL src/filters candidate/share/recoll/filters
+          cp -RL src/filters candidate/share/filters\n          cp -R src/qtgui/mtpics candidate/share/images\n          cp src/desktop/recoll.ico candidate/recoll.ico
           /mingw64/bin/windeployqt6.exe --release --no-translations --dir candidate candidate/recoll.exe
           for exe in pdftotext pdfinfo pdfdetach pdftohtml; do
             test -s "/mingw64/bin/$exe.exe"
