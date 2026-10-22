@@ -59,7 +59,9 @@ jobs:
           cp src/COPYING candidate/
           cp -R src/sampleconf candidate/share/examples
           # Dereference upstream symlinks (conftree.py/rclconfig.py); Windows packaging cannot preserve their relative targets.
-          cp -RL src/filters candidate/share/filters\n          cp -R src/qtgui/mtpics candidate/share/images\n          cp src/desktop/recoll.ico candidate/recoll.ico
+          cp -RL src/filters candidate/share/filters
+          cp -R src/qtgui/mtpics candidate/share/images
+          cp src/desktop/recoll.ico candidate/recoll.ico
           /mingw64/bin/windeployqt6.exe --release --no-translations --dir candidate candidate/recoll.exe
           for exe in pdftotext pdfinfo pdfdetach pdftohtml; do
             test -s "/mingw64/bin/$exe.exe"
