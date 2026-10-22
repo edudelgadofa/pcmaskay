@@ -1,0 +1,99 @@
+name: Windows Pro Phase 1 (candidate, no public release)
+on:
+  workflow_dispatch:
+  push:
+    branches: [windows-pro-phase1]
+permissions:
+  contents: read
+jobs:
+  build-windows-candidate:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-qt6-base
+            mingw-w64-x86_64-qt6-tools
+            mingw-w64-x86_64-xapian-core
+            mingw-w64-x86_64-libxml2
+            mingw-w64-x86_64-libxslt
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-libiconv
+            mingw-w64-x86_64-poppler
+      - name: Configure Xapian paths
+        run: |
+          set -euo pipefail
+          cfg=/mingw64/lib/cmake/xapian/xapian-config.cmake
+          if [ -f "$cfg" ]; then
+            sed -i 's|^SET(prefix "/mingw64")|get_filename_component(prefix "${CMAKE_CURRENT_LIST_DIR}/../../../" ABSOLUTE)|' "$cfg"
+          fi
+      - name: Build Recoll with GUI
+        run: |
+          set -euo pipefail
+          cmake -S src -B build_mingw -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DRECOLL_QTGUI=ON -DRECOLL_QT6_BUILD=ON \
+            -DRECOLL_ENABLE_WEBENGINE=OFF \
+            -DRECOLL_ENABLE_SYSTEMD=OFF \
+            -DRECOLL_ENABLE_X11MON=OFF \
+            -DRECOLL_BUILD_TESTS=OFF
+          cmake --build build_mingw --parallel 2
+          for exe in recoll.exe recollindex.exe recollq.exe; do
+            test -s "build_mingw/$exe" || { echo "::error::Missing GUI/CLI binary: $exe"; exit 1; }
+          done
+      - name: Stage essential runtime files
+        run: |
+          set -euo pipefail
+          mkdir -p candidate/platforms candidate/share/recoll candidate/poppler/Library/bin
+          cp build_mingw/{recoll.exe,recollindex.exe,recollq.exe} candidate/
+          cp src/COPYING candidate/
+          cp -R src/sampleconf candidate/share/recoll/examples
+          cp -R src/filters candidate/share/recoll/filters
+          /mingw64/bin/windeployqt6.exe --release --no-translations --dir candidate candidate/recoll.exe
+          for exe in pdftotext pdfinfo pdfdetach pdftohtml; do
+            test -s "/mingw64/bin/$exe.exe"
+            cp "/mingw64/bin/$exe.exe" candidate/poppler/Library/bin/
+          done
+          printf '[Paths]\nPlugins = .\n' > candidate/qt.conf
+          # Resolve all non-Windows DLL dependencies of EXEs and Qt plugins.
+          for round in 1 2 3 4 5 6 7 8; do
+            changed=0
+            while IFS= read -r bin; do
+              while IFS= read -r dll; do
+                [ -n "$dll" ] || continue
+                case "${dll,,}" in
+                  api-ms-win-*|ext-ms-win-*|kernel32.dll|user32.dll|shell32.dll|advapi32.dll|gdi32.dll|ole32.dll|oleaut32.dll|ws2_32.dll|comdlg32.dll|comctl32.dll|shlwapi.dll|rpcrt4.dll|bcrypt.dll|crypt32.dll|secur32.dll|version.dll|winmm.dll|imm32.dll|dwmapi.dll|uxtheme.dll|setupapi.dll|psapi.dll|ntdll.dll|msvcrt.dll|msvcp140.dll|vcruntime140.dll|vcruntime140_1.dll|wtsapi32.dll|iphlpapi.dll|winspool.drv|userenv.dll|netapi32.dll) continue ;;
+                esac
+                if [ -f "/mingw64/bin/$dll" ] && [ ! -f "candidate/$dll" ]; then
+                  cp "/mingw64/bin/$dll" candidate/
+                  changed=1
+                fi
+              done < <(objdump -p "$bin" | awk '/DLL Name:/ {print $3}')
+            done < <(find candidate -type f \( -iname '*.exe' -o -iname '*.dll' \))
+            [ "$changed" -eq 0 ] && break
+          done
+          test -s candidate/recoll.exe
+          test -s candidate/platforms/qwindows.dll
+          test -s candidate/poppler/Library/bin/pdftotext.exe
+          echo 'Candidate staging complete; full PDF/Office runtime and GUI validation still required.'
+      - name: Create experimental ZIP (NOT a validated release)
+        shell: pwsh
+        run: |
+          Compress-Archive -Path candidate/* -DestinationPath Recoll-Windows-Pro-EXPERIMENTAL.zip -Force
+          Get-FileHash Recoll-Windows-Pro-EXPERIMENTAL.zip -Algorithm SHA256 | Format-List
+      - uses: actions/upload-artifact@v4
+        with:
+          name: recoll-windows-pro-experimental-unverified
+          path: Recoll-Windows-Pro-EXPERIMENTAL.zip
+          if-no-files-found: error
+          retention-days: 14
