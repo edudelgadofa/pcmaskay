@@ -91,6 +91,30 @@ jobs:
         shell: pwsh
         run: |
           ./scripts/test-windows-candidate.ps1 -CandidateDir ./candidate
+      - name: Compile experimental per-user installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\\Inno Setup 6\\ISCC.exe"
+          if (!(Test-Path $iscc)) { throw "Inno Setup compiler not installed on runner: $iscc" }
+          & $iscc installer/windows-pro-candidate.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed" }
+          if (!(Test-Path "output/Recoll-Windows-Pro-EXPERIMENTAL-Setup.exe")) { throw "Missing installer" }
+          Get-FileHash "output/Recoll-Windows-Pro-EXPERIMENTAL-Setup.exe" -Algorithm SHA256
+      - name: Verify experimental silent install and uninstall
+        shell: pwsh
+        run: |
+          $setup = (Resolve-Path "output/Recoll-Windows-Pro-EXPERIMENTAL-Setup.exe").Path
+          $dest = Join-Path $env:LOCALAPPDATA "Programs/RecollWindowsPro"
+          $proc = Start-Process $setup -ArgumentList @("/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART") -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "Installer returned $($proc.ExitCode)" }
+          foreach ($name in @("recoll.exe","recollindex.exe","recollq.exe","platforms/qwindows.dll","share/examples/recoll.conf")) {
+            if (!(Test-Path (Join-Path $dest $name))) { throw "Installed file absent: $name" }
+          }
+          $uninstaller = Join-Path $dest "unins000.exe"
+          if (!(Test-Path $uninstaller)) { throw "Uninstaller missing" }
+          $p = Start-Process $uninstaller -ArgumentList @("/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART") -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Uninstaller failed: $($p.ExitCode)" }
+          if (Test-Path (Join-Path $dest "recoll.exe")) { throw "Main executable remained after uninstall" }
       - name: Create experimental ZIP (NOT a validated release)
         shell: pwsh
         run: |
@@ -99,6 +123,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: recoll-windows-pro-experimental-unverified
-          path: Recoll-Windows-Pro-EXPERIMENTAL.zip
+          path: |
+            Recoll-Windows-Pro-EXPERIMENTAL.zip
+            output/Recoll-Windows-Pro-EXPERIMENTAL-Setup.exe
           if-no-files-found: error
           retention-days: 14
